@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">                     <!-- 字符编码，支持中文 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">  <!-- 移动端适配 -->
+<title>待办事项</title>                    <!-- 浏览器标签标题 -->
+<style>
+  /* === 全局重置：所有元素去掉默认边距和内边距，改用 border-box 盒模型 === */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* === 页面主体 === */
+  body {
+    /* 系统字体栈，保证各平台显示美观 */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);  /* 紫色渐变背景 */
+    min-height: 100vh;           /* 至少占满整个视口高度 */
+    display: flex;               /* Flex 布局，让子元素居中 */
+    align-items: center;         /* 垂直居中 */
+    justify-content: center;     /* 水平居中 */
+    padding: 20px;               /* 小屏幕时四周留空 */
+  }
+
+  /* === 白色卡片容器 === */
+  .container {
+    background: rgba(255,255,255,0.95);   /* 半透明白色，隐约透出背景渐变 */
+    backdrop-filter: blur(20px);          /* 背景模糊效果，毛玻璃质感 */
+    border-radius: 24px;                  /* 大圆角 */
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08); /* 双层阴影，更立体 */
+    width: 100%;                          /* 宽度填满父容器 */
+    max-width: 520px;                     /* 最大宽度限制，大屏幕不超宽 */
+    padding: 32px 28px;                   /* 内边距 */
+    transition: transform 0.2s;           /* 变换时的平滑过渡 */
+  }
+
+  /* === 标题 "待办事项" === */
+  h1 {
+    font-size: 28px;
+    font-weight: 700;                     /* 粗体 */
+    color: #1a1a2e;                       /* 深色文字 */
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;               /* 字间距略微收紧，更现代 */
+  }
+
+  /* === 日期副标题 === */
+  .subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 24px;                  /* 和下方输入区域拉开距离 */
+  }
+
+  /* === 输入框 + 添加按钮 所在的整行 === */
+  .input-row {
+    display: flex;                        /* 横向排列 */
+    gap: 10px;                            /* 输入框和按钮之间的间距 */
+    margin-bottom: 28px;
+  }
+
+  /* === 输入框样式 === */
+  .input-row input {
+    flex: 1;                              /* 自动占满剩余宽度 */
+    padding: 14px 18px;
+    border: 2px solid #e8e8ec;            /* 浅灰边框 */
+    border-radius: 14px;                  /* 圆角 */
+    font-size: 15px;
+    outline: none;                        /* 去掉浏览器自带的焦点外框 */
+    transition: border-color 0.25s, box-shadow 0.25s;  /* 焦点动画 */
+    background: #f8f8fa;                  /* 浅灰背景 */
+  }
+
+  /* 输入框获取焦点时：边框变紫色 + 发光阴影 */
+  .input-row input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102,126,234,0.15);
+    background: #fff;                     /* 背景变白 */
+  }
+
+  .input-row input::placeholder { color: #aaa; }  /* 占位文字颜色 */
+
+  /* === "添加" 按钮 === */
+  .input-row button {
+    flex-shrink: 0;                       /* 按钮宽度不压缩 */
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #667eea, #764ba2);  /* 紫色渐变背景 */
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;                      /* 鼠标变成手型 */
+    transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+    white-space: nowrap;                  /* 防止文字换行 */
+  }
+
+  .input-row button:hover {
+    transform: translateY(-1px);          /* 悬停时微微上浮 */
+    box-shadow: 0 6px 20px rgba(102,126,234,0.4);  /* 紫色发光阴影 */
+  }
+
+  .input-row button:active { transform: scale(0.97); }  /* 点击时略微缩小，模拟按压 */
+
+  /* 按钮禁用状态：半透明 + 不可点击 */
+  .input-row button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* === 统计栏：共 X 项 / 清除已完成按钮 === */
+  .stats {
+    display: flex;
+    justify-content: space-between;       /* 左右分开排列 */
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #888;
+  }
+
+  .stats .count strong { color: #1a1a2e; }  /* 数字用深色突出 */
+
+  /* === "清除已完成" 按钮 === */
+  .clear-btn {
+    background: none;
+    border: none;
+    color: #e74c3c;                       /* 红色文字 */
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background 0.2s;
+  }
+
+  .clear-btn:hover { background: #fde8e8; }  /* 悬停时浅红背景 */
+
+  .todo-list { list-style: none; }        /* 去掉 ul 默认的项目符号 */
+
+  /* === 每一条待办事项 === */
+  .todo-item {
+    display: flex;
+    align-items: center;                  /* 内容垂直居中 */
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    margin-bottom: 6px;
+    transition: background 0.2s, transform 0.15s, opacity 0.3s;
+    animation: slideIn 0.3s ease;         /* 新项目出现时滑入动画 */
+  }
+
+  .todo-item:hover { background: #f5f5f9; }  /* 悬停时浅灰背景 */
+
+  /* === 滑入动画关键帧 === */
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }  /* 起始：透明 + 偏上 */
+    to   { opacity: 1; transform: translateY(0); }     /* 结束：完全可见 + 原位 */
+  }
+
+  /* 删除时的动画：向右滑出并淡出 */
+  .todo-item.removing {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+
+  /* === 自定义圆形复选框 === */
+  .todo-item .checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;                   /* 圆形 */
+    border: 2px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;                       /* 防止被挤压 */
+    transition: all 0.25s;
+    background: #fff;
+  }
+
+  /* 已勾选状态：紫色渐变背景 */
+  .todo-item .checkbox.checked {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-color: #667eea;
+  }
+
+  /* 已勾选时，用伪元素显示一个白色对勾 ✓ */
+  .todo-item .checkbox.checked::after {
+    content: "✓";
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  /* === 任务文字 === */
+  .todo-item .text {
+    flex: 1;                              /* 占满剩余宽度 */
+    font-size: 15px;
+    color: #2d2d3a;
+    word-break: break-word;               /* 长单词自动换行 */
+    line-height: 1.4;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  /* 已完成的任务文字：删除线 + 变灰 */
+  .todo-item .text.done {
+    text-decoration: line-through;
+    color: #b0b0b8;
+  }
+
+  /* === 删除按钮 (✕) === */
+  .todo-item .delete-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;                   /* 圆形 */
+    border: none;
+    background: transparent;
+    color: #c0c0c8;                       /* 浅灰 */
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .todo-item .delete-btn:hover {
+    background: #fde8e8;                  /* 悬停：浅红背景 */
+    color: #e74c3c;                       /* 悬停：红色文字 */
+  }
+
+  /* === 空状态（列表无任务时显示） === */
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: #bbb;
+  }
+
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 15px; }
+
+  /* === 响应式：屏幕宽度 ≤ 480px 时缩小内边距和字号 === */
+  @media (max-width: 480px) {
+    body { padding: 12px; }
+    .container { padding: 24px 18px; border-radius: 20px; }
+    h1 { font-size: 24px; }
+    .input-row input { padding: 12px 14px; font-size: 14px; }
+    .input-row button { padding: 12px 18px; font-size: 14px; }
+    .todo-item { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 标题 -->
+  <h1>待办事项</h1>
+  <!-- 日期显示（由 JS 填入内容） -->
+  <p class="subtitle" id="dateDisplay"></p>
+
+  <!-- 输入框 + 添加按钮 行 -->
+  <div class="input-row">
+    <input type="text" id="todoInput" placeholder="新增待办..." maxlength="200" autofocus>
+    <button id="addBtn">添加</button>
+  </div>
+
+  <!-- 统计栏 -->
+  <div class="stats">
+    <span class="count">共 <strong id="totalCount">0</strong> 项，已完成 <strong id="doneCount">0</strong></span>
+    <button class="clear-btn" id="clearDoneBtn">清除已完成</button>
+  </div>
+
+  <!-- 待办列表（ul > li，由 JS 动态生成） -->
+  <ul class="todo-list" id="todoList"></ul>
+
+  <!-- 空状态提示（没有任务时显示） -->
+  <div class="empty-state" id="emptyState">
+    <div class="icon">📝</div>
+    <p>还没有待办事项，添加一条吧</p>
+  </div>
+</div>
+
+<script>
+  // ============================================================
+  // 1. 数据层 —— 操作 localStorage 中的待办数据
+  // ============================================================
+
+  const STORAGE_KEY = 'todos_v1';   // localStorage 中存储数据的键名
+  let todos = [];                    // 存放所有待办项的数组
+
+  // 从 DOM 中获取各个元素的引用，后续操作直接使用这些变量
+  const todoInput  = document.getElementById('todoInput');    // 输入框
+  const addBtn     = document.getElementById('addBtn');       // 添加按钮
+  const todoList   = document.getElementById('todoList');     // 待办列表 <ul>
+  const emptyState = document.getElementById('emptyState');   // 空状态提示
+  const totalSpan  = document.getElementById('totalCount');   // 总数显示
+  const doneSpan   = document.getElementById('doneCount');    // 已完成数显示
+  const clearBtn   = document.getElementById('clearDoneBtn'); // 清除已完成按钮
+
+  /**
+   * 从 localStorage 读取已保存的待办数据
+   * 如果读取失败或数据格式不对，就初始化为空数组
+   */
+  function loadTodos() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);  // 取出字符串
+      todos = raw ? JSON.parse(raw) : [];             // 解析 JSON → 数组
+    } catch { todos = []; }                           // 解析出错时给空数组
+    if (!Array.isArray(todos)) todos = [];            // 确保是数组
+  }
+
+  /**
+   * 将当前 todos 数组保存到 localStorage
+   * JSON.stringify 把数组转成字符串再存
+   */
+  function saveTodos() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+  }
+
+  // ============================================================
+  // 2. 渲染层 —— 根据 todos 数据更新界面
+  // ============================================================
+
+  /**
+   * 遍历 todos 数组，重新生成整个列表的 HTML
+   * 同时更新统计数字和空状态显示
+   */
+  function render() {
+    // 计算已完成数量
+    const done = todos.filter(t => t.done).length;
+    totalSpan.textContent = todos.length;   // 更新总数
+    doneSpan.textContent  = done;           // 更新已完成数
+
+    // 如果没有已完成任务，隐藏"清除已完成"按钮
+    clearBtn.style.display = done === 0 ? 'none' : '';
+
+    // 如果没有任何任务，显示空状态，清空列表，结束渲染
+    if (todos.length === 0) {
+      todoList.innerHTML = '';
+      emptyState.style.display = '';
+      return;
+    }
+    // 有任务时隐藏空状态
+    emptyState.style.display = 'none';
+
+    // 使用 DocumentFragment 批量构建 DOM（比一次次 append 性能更好）
+    const frag = document.createDocumentFragment();
+
+    // 遍历每条待办，生成对应的 <li>
+    todos.forEach((todo, i) => {
+      const li = document.createElement('li');
+      li.className = 'todo-item';
+      li.dataset.index = i;               // 记录索引，方便后续操作
+
+      // --- 复选框（自定义 div，非原生 checkbox） ---
+      const cb = document.createElement('div');
+      cb.className = 'checkbox' + (todo.done ? ' checked' : '');  // 已完成就加 checked 类名
+      cb.addEventListener('click', () => toggleTodo(i));           // 点击切换完成状态
+
+      // --- 任务文字 ---
+      const text = document.createElement('span');
+      text.className = 'text' + (todo.done ? ' done' : '');       // 已完成加 done 类名（删除线）
+      text.textContent = todo.text;                                // 显示任务内容
+      text.addEventListener('click', () => toggleTodo(i));         // 点击文字也可切换
+
+      // --- 删除按钮 ---
+      const del = document.createElement('button');
+      del.className = 'delete-btn';
+      del.innerHTML = '✕';                                         // 乘号图标
+      del.setAttribute('aria-label', '删除');                      // 无障碍标签
+      del.addEventListener('click', () => removeTodo(i));          // 点击删除
+
+      // 拼装：复选框 + 文字 + 删除按钮 → 放入 <li> → 放入文档片段
+      li.appendChild(cb);
+      li.appendChild(text);
+      li.appendChild(del);
+      frag.appendChild(li);
+    });
+
+    // 清空旧列表，一次性添加新生成的所有 <li>
+    todoList.innerHTML = '';
+    todoList.appendChild(frag);
+  }
+
+  // ============================================================
+  // 3. 交互逻辑 —— 增、删、改
+  // ============================================================
+
+  /**
+   * 添加新待办
+   * 获取输入框内容 → 校验 → 推入 todos 数组 → 保存 → 重新渲染 → 清空输入框
+   */
+  function addTodo() {
+    const text = todoInput.value.trim();          // 去掉首尾空格
+    if (!text) return;                            // 空内容不添加
+    const now = Date.now();                       // 当前时间戳作为唯一 id
+    todos.push({ id: now, text, done: false, createdAt: now });  // 新任务对象
+    saveTodos();                                  // 保存到 localStorage
+    render();                                     // 刷新界面
+    todoInput.value = '';                         // 清空输入框
+    todoInput.focus();                            // 让输入框保持焦点，方便连续输入
+  }
+
+  /**
+   * 切换任务的完成/未完成状态
+   */
+  function toggleTodo(index) {
+    if (index < 0 || index >= todos.length) return;  // 越界检查
+    todos[index].done = !todos[index].done;          // 取反
+    saveTodos();
+    render();
+  }
+
+  /**
+   * 删除任务（带动画效果）
+   */
+  function removeTodo(index) {
+    if (index < 0 || index >= todos.length) return;
+    const items = todoList.children;                // 获取当前所有 <li>
+    if (items[index]) {
+      items[index].classList.add('removing');       // 添加"删除中"类名 → 触发滑出动画
+      setTimeout(() => {
+        todos.splice(index, 1);                     // 250ms 后真正从数组中删除
+        saveTodos();
+        render();
+      }, 250);                                      // 和 CSS 动画时长一致
+      return;
+    }
+    // 如果拿不到 DOM 元素，直接删除
+    todos.splice(index, 1);
+    saveTodos();
+    render();
+  }
+
+  // ============================================================
+  // 4. 事件绑定
+  // ============================================================
+
+  // "清除已完成"按钮：过滤掉全部已完成的任务
+  clearBtn.addEventListener('click', () => {
+    todos = todos.filter(t => !t.done);     // 只保留未完成
+    saveTodos();
+    render();
+  });
+
+  // "添加"按钮点击事件
+  addBtn.addEventListener('click', addTodo);
+
+  // 输入框按 Enter 键也触发添加
+  todoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTodo();
+  });
+
+  // 输入框内容变化时，控制添加按钮的禁用状态
+  // 输入为空时禁用按钮（防止点出空内容），有内容时启用
+  todoInput.addEventListener('input', () => {
+    addBtn.disabled = !todoInput.value.trim();
+  });
+
+  // ============================================================
+  // 5. 初始化
+  // ============================================================
+
+  // 显示今天的日期
+  const days = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+  const now = new Date();
+  document.getElementById('dateDisplay').textContent =
+    `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${days[now.getDay()]}`;
+
+  loadTodos();                              // 从 localStorage 读取数据
+  render();                                 // 渲染界面
+  addBtn.disabled = !todoInput.value.trim(); // 初始检查按钮状态
+</script>
+</body>
+</html>
